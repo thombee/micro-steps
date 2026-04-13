@@ -1,0 +1,17 @@
+{
+  "name": "micro-steps",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c cyan,magenta \"node server/index.js\" \"npm run dev --prefix client\"",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.3"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
