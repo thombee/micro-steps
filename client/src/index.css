@@ -988,7 +988,14 @@ input {
   line-height: 1;
 }
 
-.timer-minimize-btn {
+.timer-handle-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.timer-minimize-btn,
+.timer-pip-btn {
   font-size: 11px;
   color: var(--text-faint);
   padding: 2px 5px;
@@ -997,10 +1004,14 @@ input {
   line-height: 1;
 }
 
-.timer-minimize-btn:hover {
+.timer-minimize-btn:hover,
+.timer-pip-btn:hover {
   color: var(--text-muted);
   background: var(--border);
 }
+
+.timer-pip-btn { font-size: 13px; }
+.timer-pip-btn.is-active { color: var(--accent); }
 
 /* ── Minimized pill ──────────────────────────── */
 .timer-panel.timer-minimized {
@@ -1040,6 +1051,21 @@ input {
 }
 
 .timer-pill-time.overtime { color: #ef4444; }
+
+/* PiP active collapsed state */
+.timer-pip-active {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.timer-pip-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: auto;
+}
 
 /* ── Arc wrap ────────────────────────────────── */
 .timer-arc-wrap {
