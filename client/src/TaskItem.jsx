@@ -249,7 +249,12 @@ export default function TaskItem({
               onClick={e => e.stopPropagation()}
             />
           ) : (
-            <span className="task-title" onClick={e => { e.stopPropagation(); handleTitleClick(); }} title="Click to edit">
+            <span
+              className="task-title"
+              onClick={e => { e.stopPropagation(); onSelect(task.id); }}
+              onDoubleClick={e => { e.stopPropagation(); handleTitleClick(); }}
+              title="Double-click to edit"
+            >
               {task.title}
             </span>
           )}
