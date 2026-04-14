@@ -1,27 +1,37 @@
-import { useState, useRef } from 'react';
+import { useRef } from 'react';
 import TaskItem from './TaskItem';
+import { QUOTES } from './quotes';
+
+// Stable random quote for empty state (picked once per session)
+const EMPTY_QUOTE = QUOTES[Math.floor(Math.random() * QUOTES.length)];
 
 export default function TaskTree({
   tasks, onAdd, onToggle, onEdit, onDelete,
   onStartDeepFocus, onZoomIn,
-  onStartTimer, onSetEstimate,
+  onStartTimer, onSetEstimate, onReorder,
   nextUpId, activeTimerId, selectedDay,
-  isRoot, parentId,
+  isRoot, parentId, rootInputRef,
+  selectedTaskId, onSelect, selectedRequest, onRequestConsumed,
+  dayTasks,
 }) {
-  const [addingTitle, setAddingTitle] = useState('');
-  const inputRef = useRef(null);
+  const localInputRef = useRef(null);
+  const inputRef = rootInputRef || localInputRef;
 
   function handleAddSubmit(e) {
     e.preventDefault();
-    const title = addingTitle.trim();
+    const input = inputRef.current;
+    if (!input) return;
+    const title = input.value.trim();
     if (!title) return;
     onAdd(title, parentId ?? null);
-    setAddingTitle('');
+    input.value = '';
   }
 
   function handleAddKeyDown(e) {
-    if (e.key === 'Escape') setAddingTitle('');
+    if (e.key === 'Escape') { if (inputRef.current) inputRef.current.value = ''; }
   }
+
+  const isEmpty = isRoot && tasks.length === 0;
 
   return (
     <div className={isRoot ? 'task-tree-root' : 'task-tree'}>
@@ -31,37 +41,40 @@ export default function TaskTree({
             ref={inputRef}
             className="root-add-input"
             placeholder="Add a task… (Enter to save)"
-            value={addingTitle}
-            onChange={e => setAddingTitle(e.target.value)}
             onKeyDown={handleAddKeyDown}
             autoFocus
           />
-          {addingTitle.trim() && (
-            <button type="submit" className="root-add-btn">Add</button>
-          )}
         </form>
       )}
 
-      {tasks.map(task => (
-        <TaskItem
-          key={task.id}
-          task={task}
-          onAdd={onAdd}
-          onToggle={onToggle}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onStartDeepFocus={onStartDeepFocus}
-          onZoomIn={onZoomIn}
-          onStartTimer={onStartTimer}
-          onSetEstimate={onSetEstimate}
-          nextUpId={nextUpId}
-          activeTimerId={activeTimerId}
-          selectedDay={selectedDay}
-        />
-      ))}
-
-      {tasks.length === 0 && isRoot && (
-        <p className="empty-state">No tasks yet. Add one above to get started.</p>
+      {isEmpty ? (
+        <div className="empty-day">
+          <p className="empty-day-quote">"{EMPTY_QUOTE}"</p>
+          <p className="empty-day-hint">Press <kbd className="kbd">N</kbd> to add your first task</p>
+        </div>
+      ) : (
+        tasks.map(task => (
+          <TaskItem
+            key={task.id}
+            task={task}
+            onAdd={onAdd}
+            onToggle={onToggle}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onStartDeepFocus={onStartDeepFocus}
+            onZoomIn={onZoomIn}
+            onStartTimer={onStartTimer}
+            onSetEstimate={onSetEstimate}
+            onReorder={onReorder}
+            nextUpId={nextUpId}
+            activeTimerId={activeTimerId}
+            selectedDay={selectedDay}
+            selectedTaskId={selectedTaskId}
+            onSelect={onSelect}
+            selectedRequest={selectedRequest}
+            onRequestConsumed={onRequestConsumed}
+          />
+        ))
       )}
     </div>
   );

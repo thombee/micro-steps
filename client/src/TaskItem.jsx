@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from 'react';
-import TaskTree from './TaskTree';
 
 const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -29,16 +28,20 @@ export default function TaskItem({
   task,
   onAdd, onToggle, onEdit, onDelete,
   onStartDeepFocus, onZoomIn,
-  onStartTimer, onSetEstimate,
+  onStartTimer, onSetEstimate, onReorder,
   nextUpId, activeTimerId, selectedDay,
   depth = 0,
+  selectedTaskId, onSelect, selectedRequest, onRequestConsumed,
 }) {
   const [expanded, setExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(task.title);
   const [addingChild, setAddingChild] = useState(false);
   const [childInput, setChildInput] = useState('');
+  const [siblingFormOpen, setSiblingFormOpen] = useState(false);
+  const [siblingInput, setSiblingInput] = useState('');
   const [justCompleted, setJustCompleted] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const [editingEstimate, setEditingEstimate] = useState(false);
   const [estimateInput, setEstimateInput] = useState('');
   const [promptingEstimate, setPromptingEstimate] = useState(false);
@@ -46,6 +49,7 @@ export default function TaskItem({
 
   const editRef = useRef(null);
   const childInputRef = useRef(null);
+  const siblingInputRef = useRef(null);
   const estimateRef = useRef(null);
   const promptRef = useRef(null);
 
@@ -55,20 +59,39 @@ export default function TaskItem({
   const isNextUp = task.id === nextUpId;
   const isActiveTimer = task.id === activeTimerId;
   const isTopLevel = depth === 0;
-
-  // Carried-over indicator: task was created on a past day
+  const isSelected = String(task.id) === String(selectedTaskId);
+  const myRequest = isSelected ? selectedRequest : null;
   const isCarried = task.parent_id === null && task.day && task.day < selectedDay && !task.completed;
 
   useEffect(() => { setEditValue(task.title); }, [task.title]);
 
+  const prevCompletedRef = useRef(task.completed);
   useEffect(() => {
-    if (task.completed && hasChildren) {
+    const wasCompleted = prevCompletedRef.current;
+    prevCompletedRef.current = task.completed;
+    // Only auto-collapse when transitioning to completed, not on initial render
+    if (task.completed && !wasCompleted && hasChildren) {
       const t = setTimeout(() => setExpanded(false), 400);
       return () => clearTimeout(t);
-    } else if (!task.completed) {
+    } else if (!task.completed && wasCompleted) {
       setExpanded(true);
     }
   }, [task.completed]);
+
+  // Handle requests from App keyboard shortcuts
+  useEffect(() => {
+    if (!myRequest) return;
+    if (myRequest === 'edit') { handleTitleClick(); onRequestConsumed(); }
+    else if (myRequest === 'add-child') { startAddingChild(); onRequestConsumed(); }
+    else if (myRequest === 'add-sibling') {
+      setSiblingFormOpen(true);
+      setSiblingInput('');
+      onRequestConsumed();
+      setTimeout(() => siblingInputRef.current?.focus(), 0);
+    }
+    else if (myRequest === 'expand') { setExpanded(true); onRequestConsumed(); }
+    else if (myRequest === 'collapse') { setExpanded(false); onRequestConsumed(); }
+  }, [myRequest]);
 
   function handleCheckbox(e) {
     const checked = e.target.checked;
@@ -114,6 +137,19 @@ export default function TaskItem({
     if (e.key === 'Escape') { setAddingChild(false); setChildInput(''); }
   }
 
+  function handleAddSibling(e) {
+    e.preventDefault();
+    const title = siblingInput.trim();
+    if (!title) { setSiblingFormOpen(false); return; }
+    onAdd(title, task.parent_id ?? null);
+    setSiblingInput('');
+    setSiblingFormOpen(false);
+  }
+
+  function handleSiblingKeyDown(e) {
+    if (e.key === 'Escape') { setSiblingFormOpen(false); setSiblingInput(''); }
+  }
+
   function startEditingEstimate() {
     setEstimateInput(task.estimated_minutes != null ? String(task.estimated_minutes) : '');
     setEditingEstimate(true);
@@ -155,19 +191,39 @@ export default function TaskItem({
     if (e.key === 'Escape') setPromptingEstimate(false);
   }
 
-  const completedClass = task.completed ? ' completed' : '';
-  const nextUpClass = isNextUp ? ' next-up' : '';
-  const animClass = justCompleted ? ' just-completed' : '';
-  const activeTimerClass = isActiveTimer ? ' has-active-timer' : '';
-  const topLevelClass = isTopLevel ? ' top-level' : '';
+  function handleDeleteWithAnim() {
+    setIsLeaving(true);
+    setTimeout(() => onDelete(task.id), 180);
+  }
+
+  function handleRowClick(e) {
+    if (['BUTTON', 'INPUT', 'LABEL'].includes(e.target.tagName)) return;
+    e.stopPropagation();
+    onSelect(task.id);
+  }
+
+  const panelClass = [
+    'task-item',
+    task.completed ? 'completed' : '',
+    justCompleted ? 'just-completed' : '',
+    isActiveTimer ? 'has-active-timer' : '',
+    isTopLevel ? 'top-level' : '',
+    isSelected ? 'selected' : '',
+    isLeaving ? 'leaving' : '',
+  ].filter(Boolean).join(' ');
+
   const spentLabel = formatSpent(task.time_spent_seconds);
 
   return (
-    <div className={`task-item${completedClass}${nextUpClass}${animClass}${activeTimerClass}${topLevelClass}`} style={{ '--depth': depth }}>
-      <div className="task-row">
+    <div className={panelClass} style={{ '--depth': depth }}>
+      <div
+        className="task-row"
+        data-task-id={task.id}
+        onClick={handleRowClick}
+      >
         <button
           className={`expand-btn${hasChildren ? '' : ' invisible'}`}
-          onClick={() => setExpanded(e => !e)}
+          onClick={e => { e.stopPropagation(); setExpanded(ex => !ex); }}
           aria-label={expanded ? 'Collapse' : 'Expand'}
           tabIndex={hasChildren ? 0 : -1}
         >
@@ -190,17 +246,15 @@ export default function TaskItem({
               onChange={e => setEditValue(e.target.value)}
               onBlur={commitEdit}
               onKeyDown={handleEditKeyDown}
+              onClick={e => e.stopPropagation()}
             />
           ) : (
-            <span className="task-title" onClick={handleTitleClick} title="Click to edit">
+            <span className="task-title" onClick={e => { e.stopPropagation(); handleTitleClick(); }} title="Click to edit">
               {task.title}
             </span>
           )}
 
-          {/* Carry-forward label */}
-          {isCarried && (
-            <span className="carry-label">from {shortDate(task.day)}</span>
-          )}
+          {isCarried && <span className="carry-label">from {shortDate(task.day)}</span>}
 
           {progress && (
             <div className="progress-wrap">
@@ -212,7 +266,6 @@ export default function TaskItem({
           )}
         </div>
 
-        {/* Estimate + time spent */}
         <div className="task-meta">
           {editingEstimate ? (
             <input
@@ -223,14 +276,15 @@ export default function TaskItem({
               onChange={e => setEstimateInput(e.target.value)}
               onBlur={commitEstimate}
               onKeyDown={handleEstimateKeyDown}
+              onClick={e => e.stopPropagation()}
               placeholder="min"
             />
           ) : task.estimated_minutes ? (
-            <button className="estimate-display" onClick={startEditingEstimate} title="Edit estimate">
+            <button className="estimate-display" onClick={e => { e.stopPropagation(); startEditingEstimate(); }} title="Edit estimate">
               ~{task.estimated_minutes}m
             </button>
           ) : (
-            <button className="estimate-display estimate-empty" onClick={startEditingEstimate} title="Set time estimate">
+            <button className="estimate-display estimate-empty" onClick={e => { e.stopPropagation(); startEditingEstimate(); }} title="Set time estimate">
               +est
             </button>
           )}
@@ -239,39 +293,38 @@ export default function TaskItem({
           )}
         </div>
 
-        {/* Actions */}
         <div className="task-actions">
           <button
             className={`action-btn timer-start-btn${isActiveTimer ? ' is-active' : ''}`}
-            onClick={handleTimerClick}
+            onClick={e => { e.stopPropagation(); handleTimerClick(); }}
             title={isActiveTimer ? 'Timer running' : 'Start timer'}
           >
             {isActiveTimer ? '⏱' : '▷'}
           </button>
           <button
             className="action-btn focus-btn"
-            onClick={() => onStartDeepFocus(task.id)}
+            onClick={e => { e.stopPropagation(); onStartDeepFocus(task.id); }}
             title="Deep focus on this task"
           >
             ⊙
           </button>
           <button
             className="action-btn zoom-btn"
-            onClick={() => onZoomIn(task.id)}
+            onClick={e => { e.stopPropagation(); onZoomIn(task.id); }}
             title="Zoom into subtree"
           >
             ⤢
           </button>
           <button
             className="action-btn add-btn"
-            onClick={startAddingChild}
+            onClick={e => { e.stopPropagation(); startAddingChild(); }}
             title="Add sub-task"
           >
             +
           </button>
           <button
             className="action-btn delete-btn"
-            onClick={() => onDelete(task.id)}
+            onClick={e => { e.stopPropagation(); handleDeleteWithAnim(); }}
             title="Delete task"
           >
             ×
@@ -290,17 +343,32 @@ export default function TaskItem({
               value={promptInput}
               onChange={e => setPromptInput(e.target.value)}
               onKeyDown={handlePromptKeyDown}
+              onClick={e => e.stopPropagation()}
               placeholder="25"
             />
             <button type="submit" className="root-add-btn prompt-go-btn">Start</button>
             <button
               type="button"
               className="action-btn delete-btn"
-              onClick={() => { setPromptingEstimate(false); onStartTimer(task.id, null); }}
+              onClick={e => { e.stopPropagation(); setPromptingEstimate(false); onStartTimer(task.id, null); }}
             >
               Skip
             </button>
           </div>
+        </form>
+      )}
+
+      {siblingFormOpen && (
+        <form className="child-add-form sibling-add-form" onSubmit={handleAddSibling}>
+          <input
+            ref={siblingInputRef}
+            className="child-add-input"
+            placeholder="New task at same level… (Enter to save)"
+            value={siblingInput}
+            onChange={e => setSiblingInput(e.target.value)}
+            onKeyDown={handleSiblingKeyDown}
+            onClick={e => e.stopPropagation()}
+          />
         </form>
       )}
 
@@ -313,6 +381,7 @@ export default function TaskItem({
             value={childInput}
             onChange={e => setChildInput(e.target.value)}
             onKeyDown={handleChildInputKeyDown}
+            onClick={e => e.stopPropagation()}
           />
         </form>
       )}
@@ -331,10 +400,15 @@ export default function TaskItem({
               onZoomIn={onZoomIn}
               onStartTimer={onStartTimer}
               onSetEstimate={onSetEstimate}
+              onReorder={onReorder}
               nextUpId={nextUpId}
               activeTimerId={activeTimerId}
               selectedDay={selectedDay}
               depth={depth + 1}
+              selectedTaskId={selectedTaskId}
+              onSelect={onSelect}
+              selectedRequest={selectedRequest}
+              onRequestConsumed={onRequestConsumed}
             />
           ))}
         </div>

@@ -41,10 +41,12 @@ router.patch('/tasks/:id', (req, res) => {
   const estimated_minutes = req.body.estimated_minutes !== undefined ? req.body.estimated_minutes : task.estimated_minutes;
   const time_spent_seconds = req.body.time_spent_seconds !== undefined ? req.body.time_spent_seconds : task.time_spent_seconds;
   const day = req.body.day !== undefined ? req.body.day : task.day;
+  const parent_id = req.body.parent_id !== undefined ? (req.body.parent_id ?? null) : task.parent_id;
+  const position = req.body.position !== undefined ? req.body.position : task.position;
 
   db.prepare(
-    'UPDATE tasks SET title = ?, completed = ?, estimated_minutes = ?, time_spent_seconds = ?, day = ? WHERE id = ?'
-  ).run(title, completed, estimated_minutes, time_spent_seconds, day, id);
+    'UPDATE tasks SET title = ?, completed = ?, estimated_minutes = ?, time_spent_seconds = ?, day = ?, parent_id = ?, position = ? WHERE id = ?'
+  ).run(title, completed, estimated_minutes, time_spent_seconds, day, parent_id, position, id);
   const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
   res.json(updated);
 });
